@@ -1,12 +1,11 @@
 import csv
 import time
-
 from selenium import webdriver
 from dataclasses import dataclass, fields, astuple
 from urllib.parse import urljoin
-
-from selenium.common import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
+
 
 BASE_URL = "https://webscraper.io/"
 HOME_URL = urljoin(BASE_URL, "test-sites/e-commerce/more/")
@@ -36,24 +35,24 @@ driver = webdriver.Chrome(options=op)
 FIELDS = [field.name for field in fields(Product)]
 
 
-def extract_product(product: driver) -> Product:
+def extract_product(product_element) -> Product:
     return Product(
         title=str(
-            product.find_element(By.CSS_SELECTOR, "a.title")
+            product_element.find_element(By.CSS_SELECTOR, "a.title")
             .get_attribute("title")
         ),
         description=str(
-            product.find_element(By.CSS_SELECTOR, "p.description")
+            product_element.find_element(By.CSS_SELECTOR, "p.description")
             .text
         ),
         price=float(
-            product.find_element(By.CSS_SELECTOR, "h4.price")
+            product_element.find_element(By.CSS_SELECTOR, "h4.price")
             .text[1:]),
         rating=len(
-            product.find_elements(By.CSS_SELECTOR, "span.ws-icon-star")
+            product_element.find_elements(By.CSS_SELECTOR, "span.ws-icon-star")
         ),
         num_of_reviews=int(
-            product.find_element(By.CSS_SELECTOR, "p.review-count")
+            product_element.find_element(By.CSS_SELECTOR, "p.review-count")
             .text.split()[0]
         ),
     )
@@ -61,22 +60,22 @@ def extract_product(product: driver) -> Product:
 
 def parse_page(url: str) -> list[Product]:
     driver.get(url)
+    max_attempts = 100
+    attempts = 0
     try:
-        while True:
-            button = (
-                driver.find_element(
-                    By.CSS_SELECTOR, ".ecomerce-items-scroll-more"
-                )
-            )
+        while attempts < max_attempts:
+            button = driver.find_element(By.CSS_SELECTOR, ".ecomerce-items-scroll-more")
             if "display: none" in button.get_attribute("style"):
-                raise NoSuchElementException
+                break
             driver.execute_script("arguments[0].click();", button)
             time.sleep(0.1)
+            attempts += 1
     except NoSuchElementException:
-        products = []
-        for product in driver.find_elements(By.CSS_SELECTOR, "div.card-body"):
-            products.append(extract_product(product))
-        return products
+        pass
+    products = []
+    for product_element in driver.find_elements(By.CSS_SELECTOR, "div.card-body"):
+        products.append(extract_product(product_element))
+    return products
 
 
 def write_to_csv(products: list[Product], file_name: str) -> None:
